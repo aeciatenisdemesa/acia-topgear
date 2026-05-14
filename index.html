@@ -131,7 +131,7 @@ let COIN_FRAMES=[];
 const STAR_SPEEDS=[8,10,12,15,19,24];
 const STAR_THR=[0,500,1200,2500,4000,6000];
 let starLevel=0, meters=0, starPopup={active:false,timer:0,star:0}, coinFrame=0;
-let predsL=[],predsR=[],trees=[];
+let predsL=[],predsR=[];
 
 function scalePred(key,maxW){
   const d=predDims[key]; const s=Math.min(1,maxW/d.w);
@@ -167,12 +167,6 @@ function initBuildings(){
   }
 }
 
-function initTrees(){
-  trees=[];
-  const cols=[Math.floor(ZONE_L/2), ZONE_R_X+Math.floor(ZONE_R_W/2)];
-  for(const cx of cols)
-    for(let i=0;i<8;i++) trees.push({x:cx,y:-i*130-60});
-}
 
 // ── SUPABASE CONFIG ── preencha com suas credenciais
 const SUPABASE_URL = 'https://tvvntydcewspixiakkcq.supabase.co';
@@ -336,16 +330,6 @@ function drawBg(){
     if(IMG[p.key]) ctx.drawImage(IMG[p.key],p.x,p.y,p.w,p.h); else drawBldgFallback(p.x,p.y,p.w,p.h,'#3a3050');
   }
 
-  // árvores
-  for(const t of trees){
-    t.y+=spd*0.9;
-    if(t.y>H+60){
-      const minY=trees.filter(o=>o.x===t.x).reduce((m,b)=>b.y<m?b.y:m,0);
-      t.y=minY-110-Math.random()*50;
-    }
-    if(IMG.arvore) ctx.drawImage(IMG.arvore,t.x-42,t.y,84,93);
-    else{ctx.fillStyle='#3a6b20';ctx.beginPath();ctx.ellipse(t.x,t.y+30,22,38,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#5c3a1e';ctx.fillRect(t.x-5,t.y+60,10,33);}
-  }
 }
 
 function drawRoad(){
@@ -450,7 +434,7 @@ function startGame(){
   COIN_FRAMES=[];buildCoinFrames();
   player={x:ROAD_X+ROAD_W/2-52,y:H-220,w:104,h:176,velX:0,maxV:12};
   enemies=[];coins=[];gasList=[];sparks=[];smoke=[];
-  initBuildings(); initTrees();
+  initBuildings();
   cancelAnimationFrame(rafId); gameLoop();
 }
 
