@@ -192,23 +192,20 @@ async function renderLeader(){
 const keys={};
 window.addEventListener('keydown',e=>{keys[e.key]=true;if(e.key===' '||e.key==='Escape')togglePause();});
 window.addEventListener('keyup',e=>keys[e.key]=false);
-// Touch controls: swipe delta + zone fallback
+// Touch controls — passive:true porque touch-action:none no CSS já bloqueia scroll
 let touchX=null, touchStartX=null;
 canvas.addEventListener('touchstart',e=>{
-  e.preventDefault();
   touchX=touchStartX=e.touches[0].clientX;
-},{passive:false});
+},{passive:true});
 canvas.addEventListener('touchmove',e=>{
-  e.preventDefault();
-  if(!touchX||!running||paused)return;
+  if(touchX===null||!running||paused)return;
   const dx=(e.touches[0].clientX-touchX)/canvasScale;
   player.velX=Math.max(-player.maxV,Math.min(player.maxV,player.velX+dx*0.55));
   touchX=e.touches[0].clientX;
-},{passive:false});
+},{passive:true});
 canvas.addEventListener('touchend',e=>{
-  // Short tap: use zone (left half = left, right half = right)
   if(touchStartX!==null){
-    const totalDx=Math.abs(touchX-touchStartX);
+    const totalDx=Math.abs((touchX??touchStartX)-touchStartX);
     if(totalDx<15){
       const rect=canvas.getBoundingClientRect();
       const mid=rect.left+rect.width/2;
@@ -219,7 +216,7 @@ canvas.addEventListener('touchend',e=>{
   touchX=touchStartX=null;
 });
 document.getElementById('pauseBtn').addEventListener('click',togglePause);
-function togglePause(){if(!running)return;paused=!paused;document.getElementById('pauseBtn').textContent=paused?'▶':'⏸';if(!paused)gameLoop();}
+function togglePause(){if(!running)return;paused=!paused;document.getElementById('pauseBtn').textContent=paused?'▶':'⏸';if(!paused){_lastTS=0;gameLoop();}}
 
 // spawn
 const CAR_KEYS=['carAzul','carVerm','carAmar','carVerde','carRoxo'];
@@ -353,14 +350,16 @@ function drawGuard(side){
   for(let ty=sy;ty<H;ty+=ih) ctx.drawImage(img,gx,ty,GUARD_W,ih);
 }
 
-let rafId;
-function gameLoop(){
+let rafId, _lastTS=0;
+function gameLoop(ts=0){
   if(!running||paused)return;
+  // delta-time: mantém velocidade constante independente da frequência do RAF
+  const dt=_lastTS?Math.min((ts-_lastTS)/16.67,2):1; _lastTS=ts;
   frame++; coinFrame=(coinFrame+1)%COIN_N;
-  meters+=(baseSpeed+speedBoost)*0.05; updateStars();
-  const spd=baseSpeed+speedBoost;
+  meters+=(baseSpeed+speedBoost)*0.05*dt; updateStars();
+  const spd=(baseSpeed+speedBoost)*dt;
   if(boostTimer>0){boostTimer--;if(boostTimer<=0)speedBoost=0;}
-  fuel-=0.022;
+  fuel-=0.022*dt;
   if(fuel<=0){gameOver();return;}
   const eff=Math.max(2,spd-(fuel<20?4:fuel<50?2:0));
 
@@ -435,7 +434,7 @@ function startGame(){
   player={x:ROAD_X+ROAD_W/2-52,y:H-220,w:104,h:176,velX:0,maxV:12};
   enemies=[];coins=[];gasList=[];sparks=[];smoke=[];
   initBuildings();
-  cancelAnimationFrame(rafId); gameLoop();
+  cancelAnimationFrame(rafId); _lastTS=0; gameLoop();
 }
 
 function gameOver(){running=false;cancelAnimationFrame(rafId);document.getElementById('goScore').textContent='🏆 Pontuação: '+score;document.getElementById('nameInput').value='';document.getElementById('goDiv').classList.remove('hidden');}
