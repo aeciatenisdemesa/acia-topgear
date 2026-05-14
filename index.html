@@ -398,11 +398,12 @@ function gameLoop(ts=0){
   sparks=sparks.filter(s=>s.life>0);
   sparks.forEach(s=>{ctx.save();ctx.globalAlpha=s.life;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(s.x,s.y,3,0,Math.PI*2);ctx.fill();ctx.restore();});
 
-  // player — teclado ou zona de toque tratados igual
-  const goL=keys['ArrowLeft']||_touchZone<0;
-  const goR=keys['ArrowRight']||_touchZone>0;
-  if(goL)player.velX=Math.max(player.velX-1.2,-player.maxV);
-  else if(goR)player.velX=Math.min(player.velX+1.2,player.maxV);
+  // player — toque: lerp rápido ao alvo; teclado: aceleração gradual
+  if(_touchZone!==0){
+    const tgt=_touchZone<0?-player.maxV:player.maxV;
+    player.velX+=(tgt-player.velX)*0.45;
+  } else if(keys['ArrowLeft'])player.velX=Math.max(player.velX-1.2,-player.maxV);
+  else if(keys['ArrowRight'])player.velX=Math.min(player.velX+1.2,player.maxV);
   else player.velX*=0.82;
   player.x=Math.max(ROAD_X+3,Math.min(ROAD_X+ROAD_W-player.w-3,player.x+player.velX));
   if(IMG.truck)ctx.drawImage(IMG.truck,player.x,player.y,player.w,player.h);
