@@ -192,15 +192,16 @@ async function renderLeader(){
 const keys={};
 window.addEventListener('keydown',e=>{keys[e.key]=true;if(e.key===' '||e.key==='Escape')togglePause();});
 window.addEventListener('keyup',e=>keys[e.key]=false);
-// Touch: zona esquerda/direita — o game loop cuida da física igual ao teclado
-let _touchZone=0; // -1=esq, 0=nenhum, 1=dir
-function _updateZone(clientX){
-  const r=canvas.getBoundingClientRect();
-  _touchZone=clientX<r.left+r.width/2?-1:1;
-}
-canvas.addEventListener('touchstart',e=>{_updateZone(e.touches[0].clientX);},{passive:true});
-canvas.addEventListener('touchmove',e=>{_updateZone(e.touches[0].clientX);},{passive:true});
-canvas.addEventListener('touchend',()=>{_touchZone=0;},{passive:true});
+// Touch: segue o dedo — SET direto (não acumula entre frames)
+let _tx=null;
+canvas.addEventListener('touchstart',e=>{_tx=e.touches[0].clientX;},{passive:true});
+canvas.addEventListener('touchmove',e=>{
+  if(_tx===null||!running||paused)return;
+  const dx=(e.touches[0].clientX-_tx)/canvasScale;
+  player.velX=Math.max(-player.maxV,Math.min(player.maxV,dx*0.38));
+  _tx=e.touches[0].clientX;
+},{passive:true});
+canvas.addEventListener('touchend',()=>{_tx=null;},{passive:true});
 document.getElementById('pauseBtn').addEventListener('click',togglePause);
 function togglePause(){if(!running)return;paused=!paused;document.getElementById('pauseBtn').textContent=paused?'▶':'⏸';if(!paused){_lastTS=0;gameLoop();}}
 
@@ -398,13 +399,10 @@ function gameLoop(ts=0){
   sparks=sparks.filter(s=>s.life>0);
   sparks.forEach(s=>{ctx.save();ctx.globalAlpha=s.life;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(s.x,s.y,3,0,Math.PI*2);ctx.fill();ctx.restore();});
 
-  // player — toque: lerp rápido ao alvo; teclado: aceleração gradual
-  if(_touchZone!==0){
-    const tgt=_touchZone<0?-player.maxV:player.maxV;
-    player.velX+=(tgt-player.velX)*0.45;
-  } else if(keys['ArrowLeft'])player.velX=Math.max(player.velX-1.2,-player.maxV);
+  // player
+  if(keys['ArrowLeft'])player.velX=Math.max(player.velX-1.2,-player.maxV);
   else if(keys['ArrowRight'])player.velX=Math.min(player.velX+1.2,player.maxV);
-  else player.velX*=0.82;
+  else if(_tx===null)player.velX*=0.82;
   player.x=Math.max(ROAD_X+3,Math.min(ROAD_X+ROAD_W-player.w-3,player.x+player.velX));
   if(IMG.truck)ctx.drawImage(IMG.truck,player.x,player.y,player.w,player.h);
 
