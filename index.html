@@ -198,7 +198,7 @@ canvas.addEventListener('touchstart',e=>{_tx=e.touches[0].clientX;},{passive:tru
 canvas.addEventListener('touchmove',e=>{
   if(_tx===null||!running||paused)return;
   const dx=(e.touches[0].clientX-_tx)/canvasScale;
-  player.velX=Math.max(-player.maxV,Math.min(player.maxV,dx*0.38));
+  player.velX=Math.max(-player.maxV,Math.min(player.maxV,dx*0.58));
   _tx=e.touches[0].clientX;
 },{passive:true});
 canvas.addEventListener('touchend',()=>{_tx=null;},{passive:true});
