@@ -125,6 +125,11 @@ const PRED_KEYS_R=['pred04','pred05','pred06','pred07','pred08','pred09'];
 let baseSpeed,speedBoost,boostTimer,fuel,score,frame,running,paused;
 let player,enemies,coins,gasList,sparks,smoke;
 let scrollGrama=0,scrollRoad=0,scrollGuard=0;
+const COIN_N=24, COIN_SIZE=40;
+let COIN_FRAMES=[];
+const STAR_SPEEDS=[8,10,12,15,19,24];
+const STAR_THR=[0,500,1200,2500,4000,6000];
+let starLevel=0, meters=0, starPopup={active:false,timer:0,star:0}, coinFrame=0;
 let predsL=[],predsR=[],trees=[];
 
 function scalePred(key,maxW){
@@ -169,8 +174,8 @@ function initTrees(){
 }
 
 // ── SUPABASE CONFIG ── preencha com suas credenciais
-const SUPABASE_URL = 'https://tvvntydcewspixiakkcq.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR2dm50eWRjZXdzcGl4aWFra2NxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3NjYxNzAsImV4cCI6MjA5NDM0MjE3MH0.SjCyynHNcQx4enfBd5ybuTpWIlF0zdq5IZhSsKzsRys';
+const SUPABASE_URL = 'COLE_SUA_URL_AQUI';
+const SUPABASE_KEY = 'COLE_SUA_CHAVE_AQUI';
 const _sb = (SUPABASE_URL.startsWith('http')) ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 
 async function getLeader(){
@@ -203,28 +208,73 @@ function togglePause(){if(!running)return;paused=!paused;document.getElementById
 const CAR_KEYS=['carAzul','carVerm','carAmar','carVerde','carRoxo'];
 function laneX(l){return ROAD_X+l*LANE_W+(LANE_W-60)/2;}
 function maybeSpawn(){
-  if(frame%84===0){const l=Math.floor(Math.random()*3);enemies.push({key:CAR_KEYS[Math.floor(Math.random()*5)],x:laneX(l),y:-150,w:60,h:108});}
+  if(frame%Math.max(40,84-starLevel*8)===0){const l=Math.floor(Math.random()*3);enemies.push({key:CAR_KEYS[Math.floor(Math.random()*5)],x:laneX(l),y:-150,w:60,h:108});}
   if(frame%420===0){const l=Math.floor(Math.random()*3);gasList.push({x:laneX(l)+6,y:-80,w:42,h:52});}
-  if(frame%132===0){const l=Math.floor(Math.random()*3);coins.push({x:laneX(l)+10,y:-60,w:36,h:36});}
+  if(frame%Math.max(80,132-starLevel*6)===0){const l=Math.floor(Math.random()*3);coins.push({x:laneX(l)+10,y:-60,w:36,h:36,fi:0});}
 }
 
 function addSparks(x,y,col='#ffd700'){for(let i=0;i<10;i++)sparks.push({x,y,vx:(Math.random()-.5)*5,vy:(Math.random()-.5)*5,life:1,color:col});}
-function addSmoke(x,y){smoke.push({x,y,r:5,life:1,vx:(Math.random()-.5)*1.5,vy:-1.2});}
+function buildCoinFrames(){
+  const img=IMG.moeda; if(!img) return;
+  COIN_FRAMES=Array.from({length:COIN_N},(_,f)=>{
+    const oc=document.createElement('canvas'); oc.width=COIN_SIZE; oc.height=COIN_SIZE;
+    const cx2=oc.getContext('2d');
+    const sx=Math.cos((f/COIN_N)*Math.PI*2);
+    cx2.save();cx2.translate(COIN_SIZE/2,COIN_SIZE/2);cx2.scale(sx,1);
+    cx2.drawImage(img,-COIN_SIZE/2,-COIN_SIZE/2,COIN_SIZE,COIN_SIZE);cx2.restore();
+    return oc;
+  });
+}
+function starsStr(n){return'⭐'.repeat(n)+'☆'.repeat(5-n);}
+function updateStars(){
+  const target=STAR_SPEEDS[Math.min(starLevel,5)];
+  if(baseSpeed<target) baseSpeed+=0.004;
+  if(starLevel>=5) baseSpeed+=0.00025;
+  for(let s=STAR_THR.length-1;s>0;s--){
+    if(meters>=STAR_THR[s]&&starLevel<s){starLevel=s;starPopup={active:true,timer:130,star:s};break;}
+  }
+}
+function drawStarPopup(){
+  if(!starPopup.active) return;
+  if(--starPopup.timer<=0){starPopup.active=false;return;}
+  const a=Math.min(1,starPopup.timer/20);
+  ctx.save();ctx.globalAlpha=a;ctx.translate(W/2,H/2-60);
+  const sc=1+0.35*(1-Math.min(1,starPopup.timer/70));
+  ctx.scale(sc,sc);ctx.textAlign='center';
+  ctx.font='bold 32px "Courier New",monospace';ctx.fillStyle='#FFD700';
+  ctx.fillText('NIVEL '+starPopup.star+'!',0,0);
+  ctx.globalAlpha=a*0.6;ctx.font='bold 18px "Courier New",monospace';ctx.fillStyle='#fff';
+  ctx.fillText('MAIS RAPIDO!',0,30);
+  ctx.textAlign='left';ctx.restore();
+}
+function spawnSmoke(){
+  if(frame%4!==0) return;
+  smoke.push({x:player.x+player.w*0.5+(frame%8<4?-14:14),y:player.y+player.h-8,
+    r:5+Math.random()*4,alpha:0.45,vx:(Math.random()-0.5)*1.2,vy:2.5+Math.random()*2});
+}
+function drawSmoke(){
+  for(let i=smoke.length-1;i>=0;i--){
+    const s=smoke[i];s.y+=s.vy;s.x+=s.vx;s.r+=0.3;s.alpha-=0.022;
+    if(s.alpha<=0){smoke.splice(i,1);continue;}
+    ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+    ctx.fillStyle='rgba(160,160,160,'+s.alpha.toFixed(2)+')';ctx.fill();
+  }
+}
 function hits(a,b){const p=12;return a.x+p<b.x+b.w-p&&a.x+a.w-p>b.x+p&&a.y+p<b.y+b.h-p&&a.y+a.h-p>b.y+p;}
 
 function drawHUD(){
   ctx.fillStyle='rgba(0,0,0,0.72)';
-  ctx.beginPath();ctx.roundRect(8,8,150,88,10);ctx.fill();
+  ctx.beginPath();ctx.roundRect(8,8,160,120,10);ctx.fill();
   ctx.strokeStyle='#8a6f00';ctx.lineWidth=2;ctx.stroke();
   const fc=fuel>50?'#44ff44':fuel>20?'#ffcc00':'#ff3333';
-  [['🏆',score,'#ffd700'],['🛢',Math.ceil(fuel)+'%',fc],['⚡',Math.round((baseSpeed+speedBoost)*17.7)+' km/h','#00cfff']].forEach(([ic,v,c],i)=>{
-    ctx.font='bold 14px Courier New';ctx.fillStyle=c;ctx.fillText(ic+' '+v,20,34+i*25);
+  [['🏆',score,'#ffd700'],['🛢',Math.ceil(fuel)+'%',fc],['⚡',Math.round((baseSpeed+speedBoost)*17.7)+' km/h','#00cfff'],['⭐',starsStr(starLevel),'#FFD700']].forEach(([ic,v,c],i)=>{
+    ctx.font='bold 13px Courier New';ctx.fillStyle=c;ctx.fillText(ic+' '+v,20,32+i*23);
   });
-  ctx.fillStyle='#333';ctx.fillRect(20,92,126,8);
-  ctx.fillStyle=fc;ctx.fillRect(20,92,126*(fuel/100),8);
+  ctx.fillStyle='#333';ctx.fillRect(20,126,136,5);
+  ctx.fillStyle=fc;ctx.fillRect(20,126,136*(fuel/100),5);
   if(speedBoost>0){
-    ctx.fillStyle='rgba(0,200,255,0.18)';ctx.beginPath();ctx.roundRect(8,102,150,23,6);ctx.fill();
-    ctx.fillStyle='#00cfff';ctx.font='bold 12px Courier New';ctx.fillText('⚡ TURBO!',20,119);
+    ctx.fillStyle='rgba(0,200,255,0.18)';ctx.beginPath();ctx.roundRect(8,133,160,22,6);ctx.fill();
+    ctx.fillStyle='#00cfff';ctx.font='bold 12px Courier New';ctx.fillText('⚡ TURBO!',20,149);
   }
 }
 
@@ -299,8 +349,8 @@ function drawGuard(side){
 let rafId;
 function gameLoop(){
   if(!running||paused)return;
-  frame++;
-  baseSpeed+=0.00038;
+  frame++; coinFrame=(coinFrame+1)%COIN_N;
+  meters+=(baseSpeed+speedBoost)*0.05; updateStars();
   const spd=baseSpeed+speedBoost;
   if(boostTimer>0){boostTimer--;if(boostTimer<=0)speedBoost=0;}
   fuel-=0.022;
@@ -319,17 +369,17 @@ function gameLoop(){
   ctx.fillRect(ROAD_X+ROAD_W+GUARD_W,0,5,H);
 
   // smoke
-  if(frame%3===0)addSmoke(player.x+player.w/2,player.y+player.h-10);
-  smoke.forEach(s=>{s.x+=s.vx;s.y+=s.vy;s.r+=0.5;s.life-=0.04;});
-  smoke=smoke.filter(s=>s.life>0);
-  smoke.forEach(s=>{ctx.save();ctx.globalAlpha=s.life*0.4;ctx.fillStyle='#888';ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);ctx.fill();ctx.restore();});
+  spawnSmoke(); drawSmoke();
 
   // moedas
   coins.forEach(c=>c.y+=eff);
   coins=coins.filter(c=>{
-    if(hits(player,c)){speedBoost=2;boostTimer=150;addSparks(c.x+18,c.y+18,'#ffd700');return false;}
+    if(c.fi===undefined) c.fi=0; c.fi=(c.fi+1)%COIN_N;
+    if(hits(player,c)){addSparks(c.x+c.w/2,c.y+c.h/2,'#ffd700');speedBoost=2;boostTimer=150;return false;}
     if(c.y>H+80)return false;
-    if(IMG.moeda)ctx.drawImage(IMG.moeda,c.x,c.y,c.w,c.h); else{ctx.fillStyle='#ffd700';ctx.beginPath();ctx.arc(c.x+c.w/2,c.y+c.h/2,c.w/2,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#aa8800';ctx.lineWidth=2;ctx.stroke();}
+    if(COIN_FRAMES.length) ctx.drawImage(COIN_FRAMES[c.fi],c.x,c.y,c.w,c.w);
+    else if(IMG.moeda) ctx.drawImage(IMG.moeda,c.x,c.y,c.w,c.h);
+    else{ctx.fillStyle='#ffd700';ctx.beginPath();ctx.arc(c.x+c.w/2,c.y+c.h/2,c.w/2,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#aa8800';ctx.lineWidth=2;ctx.stroke();}
     return true;
   });
 
@@ -363,7 +413,7 @@ function gameLoop(){
   player.x=Math.max(ROAD_X+3,Math.min(ROAD_X+ROAD_W-player.w-3,player.x+player.velX));
   if(IMG.truck)ctx.drawImage(IMG.truck,player.x,player.y,player.w,player.h);
 
-  drawHUD();
+  drawHUD(); drawStarPopup();
   maybeSpawn();
   rafId=requestAnimationFrame(gameLoop);
 }
@@ -373,6 +423,8 @@ function startGame(){
   document.getElementById('goDiv').classList.add('hidden');
   document.getElementById('pauseBtn').textContent='⏸';
   baseSpeed=8;speedBoost=0;boostTimer=0;fuel=100;score=0;frame=0;running=true;paused=false;
+  starLevel=0;meters=0;coinFrame=0;starPopup={active:false,timer:0,star:0};
+  COIN_FRAMES=[];buildCoinFrames();
   player={x:ROAD_X+ROAD_W/2-52,y:H-220,w:104,h:176,velX:0,maxV:12};
   enemies=[];coins=[];gasList=[];sparks=[];smoke=[];
   initBuildings(); initTrees();
@@ -384,7 +436,7 @@ function submitScore(){const n=(document.getElementById('nameInput').value||'An�
 function restartDirect(){document.getElementById('goDiv').classList.add('hidden');startGame();}
 function goMenu(){document.getElementById('goDiv').classList.add('hidden');document.getElementById('overlay').classList.remove('hidden');renderLeader();}
 
-loadAll(()=>{renderLeader();});
+loadAll(()=>{buildCoinFrames();renderLeader();});
 </script>
 </body>
 </html>
